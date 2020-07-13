@@ -1,7 +1,6 @@
 {
 	"extends": "eslint-config-wzx",
 	"globals": {
-		"define": true,
 		"baidu": true,
 		"BMap": true,
 		"BMapLib": true,
