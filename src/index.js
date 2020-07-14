@@ -17,6 +17,8 @@ import './style.css';
  * @version 1.4
  */
 
+window.BMapLib = window.BMapLib || {};
+
 /**
  * 定义常量, 绘制的模式
  * @final {Number} DrawingType
@@ -609,7 +611,7 @@ const context = {};
 /**
  * @exports DrawingManager as BMapLib.DrawingManager
  */
-const DrawingManager = function (map, opts) {
+const DrawingManager = (window.BMapLib.DrawingManager = function (map, opts) {
 	try {
 		BMap;
 	} catch (e) {
@@ -621,7 +623,7 @@ const DrawingManager = function (map, opts) {
 	instances.push(this);
 	opts = opts || {};
 	this._initialize(map, opts);
-};
+});
 
 // 通过baidu.lang下的inherits方法，让DrawingManager继承baidu.lang.Class
 baidu.lang.inherits(DrawingManager, baidu.lang.Class, 'DrawingManager');
@@ -1524,7 +1526,7 @@ DrawingManager.prototype._calculate = function (overlay) {
  * 所以这里判断用户是否已经加载,若未加载则用js动态加载
  */
 DrawingManager.prototype._addGeoUtilsLibrary = function () {
-	if (!window.BMapLib || window.BMapLib.GeoUtils) {
+	if (!window.BMapLib.GeoUtils) {
 		const script = document.createElement('script');
 		script.setAttribute('type', 'text/javascript');
 		script.setAttribute(
