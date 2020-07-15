@@ -1,0 +1,19 @@
+{
+	"extends": "eslint-config-wzx",
+	"globals": {
+		"baidu": true,
+		"BMap": true,
+		"BMapLib": true,
+		"BMAP_ANCHOR_TOP_LEFT": true
+	},
+	"rules": {
+		"no-plusplus": "off",
+		"no-use-before-define": [
+			"error",
+			{
+				"functions": false,
+				"variables": false
+			}
+		]
+	}
+}
