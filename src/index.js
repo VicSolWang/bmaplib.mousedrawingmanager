@@ -1211,7 +1211,7 @@ import './style.css';
 	 * 所以这里判断用户是否已经加载,若未加载则用js动态加载
 	 */
 	DrawingManager.prototype._addGeoUtilsLibrary = function () {
-		if (!BMapLib.GeoUtils) {
+		if (!window.BMapLib || window.BMapLib.GeoUtils) {
 			const script = document.createElement('script');
 			script.setAttribute('type', 'text/javascript');
 			script.setAttribute(
