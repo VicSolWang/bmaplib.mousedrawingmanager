@@ -1338,7 +1338,8 @@ import './style.css';
 		 * 绑定事件,派发自定义事件
 		 */
 		Mask.prototype._bind = function () {
-			const { me, container } = this;
+			const me = this;
+			const { container } = this;
 			let lastMousedownXY = null;
 			let lastClickXY = null;
 
