@@ -1,14 +1,14 @@
 {
 	"name": "bmaplib.mousedrawingmanager",
-	"version": "0.0.1",
+	"version": "0.0.2",
 	"description": "A plugin library of Baidu Map JS API",
 	"main": "dist/index.js",
 	"files": [
-		"dist/*.js"
+		"dist/**"
 	],
 	"scripts": {
 		"build": "rollup --config build/rollup.config.js",
-		"lint": "eslint src",
+		"lint": "eslint src/**/*.js",
 		"prettify": "prettier --write src/**/*.js",
 		"lint-staged": "lint-staged",
 		"commit-lint": "commitlint -E HUSKY_GIT_PARAMS"
