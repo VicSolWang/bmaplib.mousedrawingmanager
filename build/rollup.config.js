@@ -10,6 +10,7 @@ import babel from '@rollup/plugin-babel';
 import replace from '@rollup/plugin-replace';
 import { uglify } from 'rollup-plugin-uglify';
 import postcss from 'rollup-plugin-postcss';
+import del from 'rollup-plugin-delete';
 import path from 'path';
 
 export default {
@@ -20,6 +21,7 @@ export default {
 		name: 'BMapLib.DrawingManager',
 	},
 	plugins: [
+		del({ targets: 'dist/*' }),
 		resolve(),
 		commonjs({
 			include: 'node_modules/**',
