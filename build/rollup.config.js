@@ -17,7 +17,7 @@ export default {
 	output: {
 		file: path.resolve(__dirname, '../dist/index.js'),
 		format: 'umd',
-		name: 'BMapLib.MouseDrawingManager',
+		name: 'BMapLib.DrawingManager',
 	},
 	plugins: [
 		resolve(),
@@ -29,7 +29,7 @@ export default {
 			babelHelpers: 'runtime',
 		}),
 		replace({
-			'process.env.NODE_ENV': JSON.stringify('production'),
+			'use strict': '',
 		}),
 		uglify(),
 		postcss({
