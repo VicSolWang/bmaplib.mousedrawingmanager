@@ -9,7 +9,7 @@ A plugin library of Baidu Map JS API
 
 # Installation
 
-    npm install --save-dev webpack-base-cli
+    npm install --save-dev bmaplib.mousedrawingmanager
 
 # License
 
