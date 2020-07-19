@@ -300,7 +300,6 @@ const context = {};
 		}
 		subClass.prototype.constructor = subClass;
 		subClass.superClass = superClass.prototype;
-
 		if (typeof className === 'string') {
 			proto._className = className;
 		}
@@ -376,7 +375,6 @@ const context = {};
 		element = baidu.dom.g(element);
 		let range;
 		let begin;
-
 		if (element.insertAdjacentHTML) {
 			element.insertAdjacentHTML(position, html);
 		} else {
@@ -420,13 +418,11 @@ const context = {};
 		const classMatch = ` ${result} `;
 		let i = 0;
 		const l = classArray.length;
-
 		for (; i < l; i += 1) {
 			if (classMatch.indexOf(` ${classArray[i]} `) < 0) {
 				result += (result ? ' ' : '') + classArray[i];
 			}
 		}
-
 		element.className = result;
 		return element;
 	};
@@ -490,7 +486,6 @@ const context = {};
 		} else if (element.attachEvent) {
 			element.attachEvent(`on${realType}`, realListener);
 		}
-
 		// 将监听器存储到数组中
 		lis[lis.length] = [element, type, listener, realListener, realType];
 		return element;
@@ -506,20 +501,17 @@ const context = {};
 	 * @param {Function} listener 需要移除的监听器
 	 * @shortcut un
 	 * @meta standard
-	 *
 	 * @returns {HTMLElement|window} 目标元素
 	 */
 	baidu.un = baidu.event.un = function (element, type, listener) {
 		element = baidu._g(element);
 		type = type.replace(/^on/i, '').toLowerCase();
-
 		const lis = baidu.event._listeners;
 		let len = lis.length;
 		const isRemoveAll = !listener;
 		let item;
 		let realType;
 		let realListener;
-
 		// 如果将listener的结构改成json
 		// 可以节省掉这个循环，优化性能
 		// 但是由于un的使用频率并不高，同时在listener不多的时候
@@ -527,7 +519,6 @@ const context = {};
 		// 暂不考虑此优化
 		while (len--) {
 			item = lis[len];
-
 			// listener存在时，移除element的所有以listener监听的type类型事件
 			// listener不存在时，移除element的所有type类型事件
 			if (
@@ -628,9 +619,7 @@ const DrawingManager = function (map, opts) {
 		return;
 	}
 	instances.push(this);
-
 	opts = opts || {};
-
 	this._initialize(map, opts);
 };
 
@@ -649,7 +638,6 @@ DrawingManager.prototype.open = function () {
 		return true;
 	}
 	closeInstanceExcept(this);
-
 	this._open();
 };
 
@@ -666,6 +654,7 @@ DrawingManager.prototype.close = function () {
 	}
 	const me = this;
 	this._close();
+	me._map.removeOverlay(tipLabel);
 	setTimeout(() => {
 		me._map.enableDoubleClickZoom();
 	}, 2000);
@@ -711,7 +700,7 @@ DrawingManager.prototype.getDrawingMode = function () {
  */
 DrawingManager.prototype.enableCalculate = function () {
 	this._enableCalculate = true;
-	this._addGeoUtilsLibrary();
+	this._addGeoUtilsLibrary(); // 异步调用GeoUtils
 };
 
 /**
@@ -722,6 +711,38 @@ DrawingManager.prototype.enableCalculate = function () {
  */
 DrawingManager.prototype.disableCalculate = function () {
 	this._enableCalculate = false;
+};
+
+/**
+ * 判断点是否在绘制的图形中
+ *
+ * @example <b>参考示例：</b><br />
+ * myDrawingManagerObject.isPointInOverlay(type, point, overlay);
+ */
+DrawingManager.prototype.isPointInOverlay = function (type, point, overlay) {
+	let result = false;
+	if (this._enableCalculate && BMapLib.GeoUtils) {
+		switch (type) {
+		case BMAP_DRAWING_CIRCLE:
+			result = BMapLib.GeoUtils.isPointInCircle(point, overlay);
+			break;
+		case BMAP_DRAWING_POLYGON:
+			result = BMapLib.GeoUtils.isPointInPolygon(point, overlay);
+			break;
+		case BMAP_DRAWING_RECTANGLE:
+			result = BMapLib.GeoUtils.isPointInRect(
+				point,
+				overlay.getBounds(),
+			);
+			break;
+		case BMAP_DRAWING_POLYLINE:
+			result = BMapLib.GeoUtils.isPointOnPolyline(point, overlay);
+			break;
+		default:
+			break;
+		}
+	}
+	return result;
 };
 
 /**
@@ -840,12 +861,14 @@ DrawingManager.prototype._initialize = function (map, opts) {
 	if (this._isOpen) {
 		this._open();
 	}
-
 	this.markerOptions = opts.markerOptions || {};
 	this.circleOptions = opts.circleOptions || {};
 	this.polylineOptions = opts.polylineOptions || {};
 	this.polygonOptions = opts.polygonOptions || {};
 	this.rectangleOptions = opts.rectangleOptions || {};
+	this.tipLabelOptions = opts.tipLabelOptions || {};
+	this.calculateLabelOptions = opts.calculateLabelOptions || {};
+	this.calculateDisplayOptions = opts.calculateDisplayOptions || {};
 	this.controlButton = opts.controlButton === 'right' ? 'right' : 'left';
 };
 
@@ -855,7 +878,6 @@ DrawingManager.prototype._initialize = function (map, opts) {
  */
 DrawingManager.prototype._open = function () {
 	this._isOpen = true;
-
 	// 添加遮罩，所有鼠标操作都在这个遮罩上完成
 	if (!this._mask) {
 		this._mask = new Mask();
@@ -877,7 +899,6 @@ DrawingManager.prototype._setDrawingMode = function (drawingType) {
 	if (this._isOpen) {
 		// 清空之前的自定义事件
 		this._mask.__listeners = {};
-
 		switch (drawingType) {
 		case BMAP_DRAWING_MARKER:
 			this._bindMarker();
@@ -911,7 +932,6 @@ DrawingManager.prototype._setDrawingMode = function (drawingType) {
  */
 DrawingManager.prototype._close = function () {
 	this._isOpen = false;
-
 	if (this._mask) {
 		this._map.removeOverlay(this._mask);
 	}
@@ -941,9 +961,12 @@ DrawingManager.prototype._bindMarker = function () {
 		map.addOverlay(marker);
 		me._dispatchOverlayComplete(marker);
 	};
-
 	mask.addEventListener('click', clickAction);
 };
+
+var tipLabel = null; // 实时文字tip
+var calculateLabel = null; // 实时文字计算
+var calculateExtraLabel = null; // 实时额外文字计算
 
 /**
  * 绑定鼠标画圆的事件
@@ -978,17 +1001,30 @@ DrawingManager.prototype._bindCircle = function () {
 	 */
 	var moveAction = function (e) {
 		circle.setRadius(me._map.getDistance(centerPoint, e.point));
+		map.removeOverlay(tipLabel);
+		tipLabel = me._addLabel(
+			'松开鼠标完成',
+			me.tipLabelOptions,
+			e.point,
+			new BMap.Size(10, 10),
+		);
+		// 实时计算显示
+		if (me.calculateDisplayOptions.isRealTime) {
+			addCalculateLabel('move');
+		}
 	};
 
 	/**
 	 * 绘制圆形结束
 	 */
-	var endAction = function (e) {
-		const calculate = me._calculate(circle, e.point);
+	var endAction = function () {
+		map.removeOverlay(tipLabel);
+		const calculate = addCalculateLabel('end');
 		me._dispatchOverlayComplete(circle, calculate);
 		centerPoint = null;
 		mask.disableEdgeMove();
 		mask.removeEventListener('mousemove', moveAction);
+		mask.removeEventListener('mousemove', mousedownAction);
 		baidu.un(document, 'mouseup', endAction);
 	};
 
@@ -1006,7 +1042,82 @@ DrawingManager.prototype._bindCircle = function () {
 		}
 	};
 
+	/**
+	 * 非绘制圆形过程中，鼠标移动过程的事件
+	 */
+	var mousemoveAction = function (e) {
+		baidu.preventDefault(e);
+		baidu.stopBubble(e);
+		map.removeOverlay(tipLabel);
+		tipLabel = me._addLabel(
+			'按下确认中心点，拖拽确认半径',
+			me.tipLabelOptions,
+			e.point,
+			new BMap.Size(10, 10),
+		);
+	};
+
+	/**
+	 * 添加显示所绘制图形的面积或者长度
+	 */
+	var addCalculateLabel = function (type) {
+		let prefix;
+		let content;
+		let calculate;
+		if (me._enableCalculate) {
+			if (me.calculateDisplayOptions.circleDisplayType === 'area') {
+				prefix = '面积：';
+				calculate = me._calculate(circle);
+			} else {
+				prefix = '半径：';
+				calculate = {
+					data: circle.getRadius(),
+				};
+			}
+			content = calculate.data;
+			if (
+				baidu.lang.isFunction(
+					me.calculateDisplayOptions.circleDisplayFormat,
+				)
+			) {
+				content = me.calculateDisplayOptions.circleDisplayFormat(
+					content,
+				);
+			}
+			map.removeOverlay(calculateLabel);
+			if (type === 'move') {
+				calculateLabel = me._addLabel(
+					`${prefix}${content}`,
+					me.calculateLabelOptions,
+					circle.ia[4],
+				);
+				calculateLabel.setOffset(
+					new BMap.Size(
+						-calculateLabel.V.offsetWidth,
+						-calculateLabel.V.offsetHeight,
+					),
+				);
+				calculate.label = calculateLabel;
+			} else {
+				const endLabel = me._addLabel(
+					`${prefix}${content}`,
+					me.calculateLabelOptions,
+					circle.ia[4],
+				);
+				endLabel.setOffset(
+					new BMap.Size(
+						-endLabel.V.offsetWidth,
+						-endLabel.V.offsetHeight,
+					),
+				);
+				calculate.label = endLabel;
+			}
+		}
+		return calculate;
+	};
+
 	mask.addEventListener('mousedown', mousedownAction);
+	mask.addEventListener('mousemove', mousemoveAction);
 };
 
 /**
@@ -1046,7 +1157,7 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		if (!isBinded) {
 			isBinded = true;
 			mask.enableEdgeMove();
-			mask.addEventListener('mousemove', mousemoveAction);
+			mask.addEventListener('mousemove', moveAction);
 			mask.addEventListener('dblclick', dblclickAction);
 		}
 	};
@@ -1054,8 +1165,19 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	/**
 	 * 鼠标移动过程的事件
 	 */
-	var mousemoveAction = function (e) {
+	var moveAction = function (e) {
 		overlay.setPositionAt(drawPoint.length - 1, e.point);
+		map.removeOverlay(tipLabel);
+		tipLabel = me._addLabel(
+			'单击继续，双击完成',
+			me.tipLabelOptions,
+			e.point,
+			new BMap.Size(10, 10),
+		);
+		// 实时计算显示
+		if (me.calculateDisplayOptions.isRealTime) {
+			addCalculateLabel('move');
+		}
 	};
 
 	/**
@@ -1064,11 +1186,12 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	var dblclickAction = function (e) {
 		baidu.stopBubble(e);
 		isBinded = false;
+		map.removeOverlay(tipLabel);
 		mask.disableEdgeMove();
 		mask.removeEventListener('mousedown', startAction);
+		mask.removeEventListener('mousemove', moveAction);
 		mask.removeEventListener('mousemove', mousemoveAction);
 		mask.removeEventListener('dblclick', dblclickAction);
-		// console.log(me.controlButton);
 		if (me.controlButton === 'right') {
 			points.push(e.point);
 		} else if (baidu.ie <= 8) {
@@ -1076,15 +1199,91 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		} else {
 			points.pop();
 		}
-		// console.log(points.length);
 		overlay.setPath(points);
-		const calculate = me._calculate(overlay, points.pop());
+		const calculate = addCalculateLabel('end');
 		me._dispatchOverlayComplete(overlay, calculate);
 		points.length = 0;
 		drawPoint.length = 0;
 		me.close();
 	};
 
+	/**
+	 * 非绘制多边形过程中，鼠标移动过程的事件
+	 */
+	var mousemoveAction = function (e) {
+		baidu.preventDefault(e);
+		baidu.stopBubble(e);
+		map.removeOverlay(tipLabel);
+		tipLabel = me._addLabel(
+			'单击确认起点',
+			me.tipLabelOptions,
+			e.point,
+			new BMap.Size(10, 10),
+		);
+	};
+
+	/**
+	 * 添加显示所绘制图形的面积或者长度
+	 */
+	var addCalculateLabel = function (type) {
+		let prefix;
+		let content;
+		let calculate;
+		if (me._enableCalculate) {
+			if (me._drawingType === BMAP_DRAWING_POLYGON) {
+				prefix = '面积：';
+				calculate = me._calculate(overlay);
+				content = calculate.data;
+				if (
+					baidu.lang.isFunction(
+						me.calculateDisplayOptions.polygonDisplayFormat,
+					)
+				) {
+					content = me.calculateDisplayOptions.polygonDisplayFormat(
+						content,
+					);
+				}
+			} else {
+				prefix = '总长：';
+				calculate = me._calculate(overlay);
+				content = calculate.data;
+				if (
+					baidu.lang.isFunction(
+						me.calculateDisplayOptions.polylineDisplayFormat,
+					)
+				) {
+					content = me.calculateDisplayOptions.polylineDisplayFormat(
+						content,
+					);
+				}
+			}
+			map.removeOverlay(calculateLabel);
+			if (type === 'move') {
+				calculateLabel = me._addLabel(
+					`${prefix}${content}`,
+					me.calculateLabelOptions,
+					points[0],
+				);
+				calculateLabel.setOffset(
+					new BMap.Size(0, -calculateLabel.V.offsetHeight - 5),
+				);
+				calculate.label = calculateLabel;
+			} else {
+				const endLabel = me._addLabel(
+					`${prefix}${content}`,
+					me.calculateLabelOptions,
+					points[0],
+				);
+				endLabel.setOffset(
+					new BMap.Size(0, -endLabel.V.offsetHeight - 5),
+				);
+				calculate.label = endLabel;
+			}
+		}
+		return calculate;
+	};
+
+	mask.addEventListener('mousemove', mousemoveAction);
 	mask.addEventListener('mousedown', startAction);
 
 	// 双击时候不放大地图级别
@@ -1132,32 +1331,166 @@ DrawingManager.prototype._bindRectangle = function () {
 	 */
 	var moveAction = function (e) {
 		polygon.setPath(me._getRectanglePoint(startPoint, e.point));
+		map.removeOverlay(tipLabel);
+		tipLabel = me._addLabel(
+			'松开鼠标完成',
+			me.tipLabelOptions,
+			e.point,
+			new BMap.Size(10, 10),
+		);
+		// 实时计算显示
+		if (me.calculateDisplayOptions.isRealTime) {
+			addCalculateLabel('move');
+		}
 	};
 
 	/**
 	 * 绘制矩形结束
 	 */
 	var endAction = function () {
-		const calculate = me._calculate(polygon, polygon.getPath()[2]);
+		map.removeOverlay(tipLabel);
+		const calculate = addCalculateLabel('end');
 		me._dispatchOverlayComplete(polygon, calculate);
 		startPoint = null;
 		mask.disableEdgeMove();
 		mask.removeEventListener('mousemove', moveAction);
+		mask.removeEventListener('mousemove', mousemoveAction);
 		baidu.un(document, 'mouseup', endAction);
 	};
 
+	/**
+	 * 非绘制矩形过程中，鼠标移动过程的事件
+	 */
+	var mousemoveAction = function (e) {
+		baidu.preventDefault(e);
+		baidu.stopBubble(e);
+		map.removeOverlay(tipLabel);
+		tipLabel = me._addLabel(
+			'按住确认起点，拖拽进行绘制',
+			me.tipLabelOptions,
+			e.point,
+			new BMap.Size(10, 10),
+		);
+	};
+
+	/**
+	 * 添加显示所绘制图形的面积或者长度
+	 */
+	var addCalculateLabel = function (type) {
+		let prefix;
+		let content;
+		let calculate;
+		const points = polygon.getPath();
+		if (me._enableCalculate) {
+			if (me.calculateDisplayOptions.rectangleDisplayType === 'area') {
+				prefix = '面积：';
+				calculate = me._calculate(polygon);
+				content = calculate.data;
+				if (
+					baidu.lang.isFunction(
+						me.calculateDisplayOptions.rectangleDisplayFormat,
+					)
+				) {
+					content = me.calculateDisplayOptions.rectangleDisplayFormat(
+						content,
+					);
+				}
+				map.removeOverlay(calculateLabel);
+				if (type === 'move') {
+					calculateLabel = me._addLabel(
+						`${prefix}${content}`,
+						me.calculateLabelOptions,
+						points[0],
+					);
+					calculateLabel.setOffset(
+						new BMap.Size(
+							-calculateLabel.V.offsetWidth,
+							-calculateLabel.V.offsetHeight,
+						),
+					);
+					calculate.label = calculateLabel;
+				} else {
+					const endLabel = me._addLabel(
+						`${prefix}${content}`,
+						me.calculateLabelOptions,
+						points[0],
+					);
+					endLabel.setOffset(
+						new BMap.Size(
+							-endLabel.V.offsetWidth,
+							-endLabel.V.offsetHeight,
+						),
+					);
+					calculate.label = endLabel;
+				}
+			} else {
+				prefix = '边长：';
+				const width = me._map.getDistance(points[0], points[2]);
+				const height = me._map.getDistance(points[0], points[3]);
+				calculate = {
+					data: [width, height],
+				};
+				content = calculate.data;
+				if (
+					baidu.lang.isFunction(
+						me.calculateDisplayOptions.rectangleDisplayFormat,
+					)
+				) {
+					content = content.map((item) =>
+						me.calculateDisplayOptions.rectangleDisplayFormat(item),
+					);
+				}
+				map.removeOverlay(calculateLabel);
+				map.removeOverlay(calculateExtraLabel);
+				if (type === 'move') {
+					calculateLabel = me._addLabel(
+						`${prefix}${content[0]}`,
+						me.calculateLabelOptions,
+						points[0],
+					);
+					calculateExtraLabel = me._addLabel(
+						`${prefix}${content[1]}`,
+						me.calculateLabelOptions,
+						points[1],
+						new BMap.Size(5, 0),
+					);
+					calculateLabel.setOffset(
+						new BMap.Size(0, -calculateLabel.V.offsetHeight - 5),
+					);
+					calculate.label = [calculateLabel, calculateExtraLabel];
+				} else {
+					const endLabel = me._addLabel(
+						`${prefix}${content[0]}`,
+						me.calculateLabelOptions,
+						points[0],
+					);
+					const endExtraLabel = me._addLabel(
+						`${prefix}${content[1]}`,
+						me.calculateLabelOptions,
+						points[1],
+						new BMap.Size(5, 0),
+					);
+					endLabel.setOffset(
+						new BMap.Size(0, -endLabel.V.offsetHeight - 5),
+					);
+					calculate.label = [endLabel, endExtraLabel];
+				}
+			}
+		}
+		return calculate;
+	};
+
 	mask.addEventListener('mousedown', startAction);
+	mask.addEventListener('mousemove', mousemoveAction);
 };
 
 /**
- * 添加显示所绘制图形的面积或者长度
+ * 计算所绘制图形的面积或者长度
  * @param {overlay} 覆盖物
- * @param {point} 显示的位置
  */
-DrawingManager.prototype._calculate = function (overlay, point) {
+DrawingManager.prototype._calculate = function (overlay) {
 	const result = {
 		data: 0, // 计算出来的长度或面积
-		label: null, // 显示长度或面积的label对象
 	};
 	if (this._enableCalculate && BMapLib.GeoUtils) {
 		const type = overlay.toString();
@@ -1175,20 +1508,19 @@ DrawingManager.prototype._calculate = function (overlay, point) {
 		default:
 			break;
 		}
-		// 一场情况处理
+		// 异常情况处理
 		if (!result.data || result.data < 0) {
 			result.data = 0;
 		} else {
 			// 保留2位小数位
 			result.data = result.data.toFixed(2);
 		}
-		result.label = this._addLabel(point, result.data);
 	}
 	return result;
 };
 
 /**
- * 开启测距和测面功能需要依赖于GeoUtils库
+ * 开启测距、测面及判断点位置功能需要依赖于GeoUtils库
  * 所以这里判断用户是否已经加载,若未加载则用js动态加载
  */
 DrawingManager.prototype._addGeoUtilsLibrary = function () {
@@ -1205,13 +1537,24 @@ DrawingManager.prototype._addGeoUtilsLibrary = function () {
 
 /**
  * 向地图中添加文本标注
- * @param {Point}
- * @param {String} 所以显示的内容
+ * @param {String}       显示内容
+ * @param {LabelOptions} 样式
+ * @param {Point}        地理位置
+ * @param {Size}         位置偏移值
  */
-DrawingManager.prototype._addLabel = function (point, content) {
+DrawingManager.prototype._addLabel = function (
+	content,
+	options,
+	point,
+	offset,
+) {
 	const label = new BMap.Label(content, {
 		position: point,
+		offset,
 	});
+	if (options) {
+		label.setStyle(options);
+	}
 	this._map.addOverlay(label);
 	return label;
 };
@@ -1274,7 +1617,6 @@ function initMask() {
 	Mask.prototype.dispatchEvent = baidu.lang.Class.prototype.dispatchEvent;
 	Mask.prototype.addEventListener =		baidu.lang.Class.prototype.addEventListener;
 	Mask.prototype.removeEventListener =		baidu.lang.Class.prototype.removeEventListener;
-
 	Mask.prototype.initialize = function (map) {
 		const me = this;
 		this._map = map;
@@ -1288,7 +1630,6 @@ function initMask() {
 		this._bind();
 		return div;
 	};
-
 	Mask.prototype.draw = function () {
 		const map = this._map;
 		const point = map.pixelToPoint(new BMap.Pixel(0, 0));
@@ -1342,11 +1683,9 @@ function initMask() {
 				e.point = point;
 				me.dispatchEvent(e);
 			};
-
 			if (type === 'mousedown') {
 				lastMousedownXY = getXYbyEvent(e);
 			}
-
 			const nowXY = getXYbyEvent(e);
 			// click经过一些特殊处理派发，其他同事件按正常的dom事件派发
 			if (type === 'click') {
@@ -1387,7 +1726,6 @@ function initMask() {
 		while (index--) {
 			baidu.on(container, events[index], domEvent);
 		}
-
 		// 鼠标移动过程中，到地图边缘后自动平移地图
 		baidu.on(container, 'mousemove', (e) => {
 			if (me._enableEdgeMove) {
@@ -1406,7 +1744,6 @@ function initMask() {
 			}
 			return new BMap.Pixel(clientX, clientY);
 		}
-
 		const map = this._map;
 		const me = this;
 		let pixel = map.pointToPixel(this.getDrawPoint(e));
@@ -1473,7 +1810,9 @@ function initMask() {
 		let trigger = baidu.getTarget(e);
 		let x = e.offsetX || e.layerX || 0;
 		let y = e.offsetY || e.layerY || 0;
-		if (Number(trigger.nodeType) !== 1) trigger = trigger.parentNode;
+		if (Number(trigger.nodeType) !== 1) {
+			trigger = trigger.parentNode;
+		}
 		while (trigger && trigger != map.getContainer()) {
 			if (
 				!(
@@ -1504,12 +1843,10 @@ function DrawingTool(drawingManager, drawingToolOptions) {
 		this[pro] = DrawingTool.prototype[pro];
 	}
 	this.drawingManager = drawingManager;
-
 	drawingToolOptions = this.drawingToolOptions = drawingToolOptions || {};
 	// 默认停靠位置和偏移量
 	this.defaultAnchor = BMAP_ANCHOR_TOP_LEFT;
 	this.defaultOffset = new BMap.Size(10, 10);
-
 	// 默认所有工具栏都显示
 	this.defaultDrawingModes = [
 		BMAP_DRAWING_MARKER,
@@ -1524,7 +1861,6 @@ function DrawingTool(drawingManager, drawingToolOptions) {
 	} else {
 		this.drawingModes = this.defaultDrawingModes;
 	}
-
 	// 用户设置停靠位置和偏移量
 	if (drawingToolOptions.anchor) {
 		this.setAnchor(drawingToolOptions.anchor);
@@ -1537,7 +1873,6 @@ function DrawingTool(drawingManager, drawingToolOptions) {
 function initDrawingTool() {
 	// 通过JavaScript的prototype属性继承于BMap.Control
 	DrawingTool.prototype = new BMap.Control();
-
 	// 自定义控件必须实现自己的initialize方法,并且将控件的DOM元素返回
 	// 在本方法中创建个div元素作为控件的容器,并将其添加到地图容器中
 	DrawingTool.prototype.initialize = function (map) {
@@ -1571,11 +1906,9 @@ function initDrawingTool() {
 		tips[BMAP_DRAWING_POLYLINE] = '画折线';
 		tips[BMAP_DRAWING_POLYGON] = '画多边形';
 		tips[BMAP_DRAWING_RECTANGLE] = '画矩形';
-
 		const getItem = function (className, drawingType) {
 			return `<a class="${className}" drawingType="${drawingType}" href="javascript:void(0)" title="${tips[drawingType]}" onfocus="this.blur()"></a>`;
 		};
-
 		const html = [];
 		html.push(getItem('BMapLib_box BMapLib_hander', 'hander'));
 		for (let i = 0, len = this.drawingModes.length; i < len; i += 1) {
