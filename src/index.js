@@ -1068,10 +1068,10 @@ DrawingManager.prototype._bindCircle = function () {
 		let calculate;
 		if (me._enableCalculate) {
 			if (me.calculateDisplayOptions.circleDisplayType === 'area') {
-				prefix = '面积：';
+				prefix =					me.calculateDisplayOptions.circleDisplayPrefix || '面积：';
 				calculate = me._calculate(circle);
 			} else {
-				prefix = '半径：';
+				prefix =					me.calculateDisplayOptions.circleDisplayPrefix || '半径：';
 				calculate = {
 					data: circle.getRadius(),
 				};
@@ -1233,7 +1233,7 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		let calculate;
 		if (me._enableCalculate) {
 			if (me._drawingType === BMAP_DRAWING_POLYGON) {
-				prefix = '面积：';
+				prefix =					me.calculateDisplayOptions.polygonDisplayPrefix || '面积：';
 				calculate = me._calculate(overlay);
 				content = calculate.data;
 				if (
@@ -1246,7 +1246,8 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 					);
 				}
 			} else {
-				prefix = '总长：';
+				prefix =					me.calculateDisplayOptions.polylineDisplayPrefix
+					|| '总长：';
 				calculate = me._calculate(overlay);
 				content = calculate.data;
 				if (
@@ -1385,7 +1386,8 @@ DrawingManager.prototype._bindRectangle = function () {
 		const points = polygon.getPath();
 		if (me._enableCalculate) {
 			if (me.calculateDisplayOptions.rectangleDisplayType === 'area') {
-				prefix = '面积：';
+				prefix =					me.calculateDisplayOptions.rectangleDisplayPrefix
+					|| '面积：';
 				calculate = me._calculate(polygon);
 				content = calculate.data;
 				if (
@@ -1426,7 +1428,8 @@ DrawingManager.prototype._bindRectangle = function () {
 					calculate.label = endLabel;
 				}
 			} else {
-				prefix = '边长：';
+				prefix =					me.calculateDisplayOptions.rectangleDisplayPrefix
+					|| '边长：';
 				const width = me._map.getDistance(points[0], points[2]);
 				const height = me._map.getDistance(points[0], points[3]);
 				calculate = {
