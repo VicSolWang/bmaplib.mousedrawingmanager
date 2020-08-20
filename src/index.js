@@ -872,6 +872,26 @@ DrawingManager.prototype._initialize = function (map, opts) {
 	this.calculateLabelOptions = opts.calculateLabelOptions || {};
 	this.calculateDisplayOptions = opts.calculateDisplayOptions || {};
 	this.controlButton = opts.controlButton === 'right' ? 'right' : 'left';
+
+	// 地图缩放时，circle需要重新设置中心点坐标和半径
+	if (window.resetCircleAfterZoomChange) {
+		map.removeEventListener('zoomend', window.resetCircleAfterZoomChange);
+	}
+	window.resetCircleAfterZoomChange = (e) => {
+		e.target
+			.getOverlays()
+			.filter((item) => item.NQ === 'Circle' && item.realV)
+			.forEach((item) => {
+				const pixelCenter = map.pointToOverlayPixel(item.point);
+				item.realV.setAttribute('cx', pixelCenter.x);
+				item.realV.setAttribute('cy', pixelCenter.y);
+				item.realV.setAttribute(
+					'r',
+					Math.round(this.getPixelRadius(item.point, item.endPoint)),
+				);
+			});
+	};
+	map.addEventListener('zoomend', window.resetCircleAfterZoomChange);
 };
 
 /**
@@ -966,6 +986,15 @@ DrawingManager.prototype._bindMarker = function () {
 	mask.addEventListener('click', clickAction);
 };
 
+// 获取圆形覆盖物的像素半径（两点对应的像素坐标的距离）
+DrawingManager.prototype.getPixelRadius = function (centerPoint, endPoint) {
+	const centerPointPixel = this._map.pointToOverlayPixel(centerPoint);
+	const endPointPixel = this._map.pointToOverlayPixel(endPoint);
+	const distanceX = Math.abs(endPointPixel.x - centerPointPixel.x);
+	const distanceY = Math.abs(endPointPixel.y - centerPointPixel.y);
+	return Math.sqrt(distanceX ** 2 + distanceY ** 2);
+};
+
 var tipLabel = null; // 实时文字tip
 var calculateLabel = null; // 实时文字计算
 var calculateExtraLabel = null; // 实时额外文字计算
@@ -991,8 +1020,44 @@ DrawingManager.prototype._bindCircle = function () {
 			return;
 		}
 		centerPoint = e.point;
-		circle = new BMap.Circle(centerPoint, 0, me.circleOptions);
+		circle = new BMap.Circle(centerPoint, 0, {
+			...me.circleOptions,
+			...{ strokeOpacity: '0', fillOpacity: '0' },
+		});
 		map.addOverlay(circle);
+		// 原有通过path画的圆设置为透明，通过插入svg的circle图形进行替代，解决画圆不规范的问题
+		const pixelCenter = map.pointToOverlayPixel(e.point);
+		const realCircle = document.createElementNS(
+			'http://www.w3.org/2000/svg',
+			'circle',
+		);
+		realCircle.setAttribute('stroke', circle.z.strokeColor);
+		realCircle.setAttribute('fill', circle.z.fillColor);
+		realCircle.setAttribute('stroke-width', circle.z.lc);
+		realCircle.setAttribute(
+			'stroke-opacity',
+			me.circleOptions.strokeOpacity < 0
+				|| me.circleOptions.strokeOpacity > 1
+				? 0.65
+				: me.circleOptions.strokeOpacity,
+		);
+		realCircle.setAttribute(
+			'fill-opacity',
+			me.circleOptions.fillOpacity < 0 || me.circleOptions.fillOpacity > 1
+				? 0.65
+				: me.circleOptions.fillOpacity,
+		);
+		realCircle.setAttribute(
+			'stroke-dasharray',
+			circle.z.strokeStyle === 'dashed' ? 6 : 0,
+		);
+		realCircle.setAttribute('cx', pixelCenter.x);
+		realCircle.setAttribute('cy', pixelCenter.y);
+		realCircle.setAttribute('r', 0);
+		realCircle.setAttribute('style', 'cursor: pointer;user-select: none;');
+		circle.V.setAttribute('style', 'visibility: hidden;');
+		circle.V.parentNode.insertBefore(realCircle, circle.V);
+		circle.realV = realCircle;
 		mask.enableEdgeMove();
 		mask.addEventListener('mousemove', moveAction);
 		baidu.on(document, 'mouseup', endAction);
@@ -1002,7 +1067,12 @@ DrawingManager.prototype._bindCircle = function () {
 	 * 绘制圆形过程中，鼠标移动过程的事件
 	 */
 	var moveAction = function (e) {
+		circle.endPoint = e.point;
 		circle.setRadius(me._map.getDistance(centerPoint, e.point));
+		circle.realV.setAttribute(
+			'r',
+			Math.round(me.getPixelRadius(centerPoint, e.point)),
+		);
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
 			'松开鼠标完成',
@@ -1087,11 +1157,22 @@ DrawingManager.prototype._bindCircle = function () {
 				);
 			}
 			map.removeOverlay(calculateLabel);
+			// 取圆心与其正上方的圆上点连线逆时针旋转35度位置处圆上点作为label的定位点
+			const pixelCenter = map.pointToOverlayPixel(circle.getCenter());
+			const pixelRadius = circle.realV.getAttribute('r');
+			const pixelLabelPoint = {
+				x:
+					pixelCenter.x
+					- Math.sin(2 * Math.PI * (35 / 360)) * pixelRadius,
+				y:
+					pixelCenter.y
+					- Math.cos(2 * Math.PI * (35 / 360)) * pixelRadius,
+			};
 			if (type === 'move') {
 				calculateLabel = me._addLabel(
 					`${prefix}${content}`,
 					me.calculateLabelOptions,
-					circle.ia[4],
+					map.overlayPixelToPoint(pixelLabelPoint),
 				);
 				calculateLabel.setOffset(
 					new BMap.Size(
@@ -1104,7 +1185,7 @@ DrawingManager.prototype._bindCircle = function () {
 				const endLabel = me._addLabel(
 					`${prefix}${content}`,
 					me.calculateLabelOptions,
-					circle.ia[4],
+					map.overlayPixelToPoint(pixelLabelPoint),
 				);
 				endLabel.setOffset(
 					new BMap.Size(
@@ -1430,7 +1511,7 @@ DrawingManager.prototype._bindRectangle = function () {
 			} else {
 				prefix =					me.calculateDisplayOptions.rectangleDisplayPrefix
 					|| '边长：';
-				const width = me._map.getDistance(points[0], points[2]);
+				const width = me._map.getDistance(points[0], points[1]);
 				const height = me._map.getDistance(points[0], points[3]);
 				calculate = {
 					data: [width, height],
