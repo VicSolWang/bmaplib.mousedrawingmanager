@@ -880,7 +880,7 @@ DrawingManager.prototype._initialize = function (map, opts) {
 	window.resetCircleAfterZoomChange = (e) => {
 		e.target
 			.getOverlays()
-			.filter((item) => item.NQ === 'Circle' && item.realV)
+			.filter((item) => item.realV)
 			.forEach((item) => {
 				const pixelCenter = map.pointToOverlayPixel(item.point);
 				item.realV.setAttribute('cx', pixelCenter.x);
@@ -955,6 +955,7 @@ DrawingManager.prototype._setDrawingMode = function (drawingType) {
 DrawingManager.prototype._close = function () {
 	this._isOpen = false;
 	if (this._mask) {
+		this._mask.disableEdgeMove();
 		this._map.removeOverlay(this._mask);
 	}
 
