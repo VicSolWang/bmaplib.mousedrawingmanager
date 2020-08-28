@@ -1165,6 +1165,7 @@ DrawingManager.prototype._bindCircle = function () {
 		mask.removeEventListener('mousemove', moveAction);
 		mask.removeEventListener('mousemove', mousemoveAction);
 		baidu.un(document, 'mouseup', endAction);
+		baidu.un(document, 'keyup', escCancelAction);
 		const removeAction = function (_e) {
 			if (_e.target.realV) {
 				_e.target.realV.remove();
@@ -1193,7 +1194,6 @@ DrawingManager.prototype._bindCircle = function () {
 	var escCancelAction = function (e) {
 		if (Number(e.keyCode) === 27) {
 			endAction(e);
-			baidu.un(document, 'keyup', escCancelAction);
 		}
 	};
 
@@ -1370,6 +1370,8 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		mask.removeEventListener('mousemove', moveAction);
 		mask.removeEventListener('mousemove', mousemoveAction);
 		mask.removeEventListener('dblclick', dblclickAction);
+		baidu.un(document, 'mouseup', rightCancelAction);
+		baidu.un(document, 'keyup', rightCancelAction);
 		if (baidu.ie <= 8) {
 			// console.log(points);
 		} else {
@@ -1397,8 +1399,6 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	var rightCancelAction = function (e) {
 		if (Number(e.button) === 2 || Number(e.keyCode) === 27) {
 			dblclickAction(e);
-			baidu.un(document, 'mouseup', rightCancelAction);
-			baidu.un(document, 'keyup', rightCancelAction);
 		}
 	};
 
@@ -1558,6 +1558,7 @@ DrawingManager.prototype._bindRectangle = function () {
 		mask.removeEventListener('mousemove', moveAction);
 		mask.removeEventListener('mousemove', mousemoveAction);
 		baidu.un(document, 'mouseup', endAction);
+		baidu.un(document, 'keyup', escCancelAction);
 		if (
 			me._enableRightCancel
 			&& (Number(e.button) === 2 || Number(e.keyCode) === 27)
@@ -1580,7 +1581,6 @@ DrawingManager.prototype._bindRectangle = function () {
 	var escCancelAction = function (e) {
 		if (Number(e.keyCode) === 27) {
 			endAction(e);
-			baidu.un(document, 'keyup', escCancelAction);
 		}
 	};
 
