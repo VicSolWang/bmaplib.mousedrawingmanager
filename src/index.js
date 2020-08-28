@@ -716,6 +716,34 @@ DrawingManager.prototype.disableCalculate = function () {
 };
 
 /**
+ * 打开鼠标右键(ESC按键)取消绘制功能
+ *
+ * @example <b>参考示例：</b><br />
+ * myDrawingManagerObject.enableRightCancel();
+ */
+DrawingManager.prototype.enableRightCancel = function () {
+	this._enableRightCancel = true;
+	// 若地图绘制状态已开启，直接添加监听
+	if (this._isOpen === true && !this._rightCancelSwitch) {
+		this._addRightCancelAction();
+	}
+};
+
+/**
+ * 关闭鼠标右键(ESC按键)取消绘制功能
+ *
+ * @example <b>参考示例：</b><br />
+ * myDrawingManagerObject.disableRightCancel();
+ */
+DrawingManager.prototype.disableRightCancel = function () {
+	this._enableRightCancel = false;
+	// 若地图绘制状态已开启，直接取消监听
+	if (this._isOpen === true && this._rightCancelSwitch) {
+		this._removeRightCancelAction();
+	}
+};
+
+/**
  * 判断点是否在绘制的图形中
  *
  * @example <b>参考示例：</b><br />
@@ -854,6 +882,11 @@ DrawingManager.prototype._initialize = function (map, opts) {
 		this.disableCalculate();
 	}
 
+	// 是否启用右键(ESC按键)取消绘制功能
+	this._enableRightCancel = opts.enableRightCancel === true;
+	// 右键(ESC按键)取消绘制回调
+	this.rightCancelCallback = opts.rightCancelCallback;
+
 	/**
 	 * 是否已经开启了绘制状态
 	 * @private
@@ -871,7 +904,6 @@ DrawingManager.prototype._initialize = function (map, opts) {
 	this.tipLabelOptions = opts.tipLabelOptions || {};
 	this.calculateLabelOptions = opts.calculateLabelOptions || {};
 	this.calculateDisplayOptions = opts.calculateDisplayOptions || {};
-	this.controlButton = opts.controlButton === 'right' ? 'right' : 'left';
 
 	// 地图缩放时，circle需要重新设置中心点坐标和半径
 	if (window.resetCircleAfterZoomChange) {
@@ -906,6 +938,10 @@ DrawingManager.prototype._open = function () {
 	}
 	this._map.addOverlay(this._mask);
 	this._setDrawingMode(this._drawingType);
+
+	if (this._enableRightCancel && !this._rightCancelSwitch) {
+		this._addRightCancelAction();
+	}
 };
 
 /**
@@ -959,11 +995,45 @@ DrawingManager.prototype._close = function () {
 		this._map.removeOverlay(this._mask);
 	}
 
+	if (this._rightCancelSwitch) {
+		this._removeRightCancelAction();
+	}
+
 	/**
 	 * 如果添加了工具栏，则关闭时候将工具栏样式设置为拖拽地图
 	 */
 	if (this._drawingTool) {
 		this._drawingTool.setStyleByDrawingMode('hander');
+	}
+};
+
+/**
+ * 添加对鼠标右键(ESC按键)取消绘制的监听
+ */
+DrawingManager.prototype._addRightCancelAction = function () {
+	this._rightCancelSwitch = true;
+	window.rightCancelAction = (e) => {
+		if (Number(e.button) === 2 || Number(e.keyCode) === 27) {
+			this.close();
+			if (baidu.lang.isFunction(this.rightCancelCallback)) {
+				this.rightCancelCallback();
+			}
+		}
+	};
+	// 监听键盘ESC按键按下后放开事件
+	document.addEventListener('keyup', window.rightCancelAction);
+	// 监听鼠标右键按下后放开事件
+	document.addEventListener('mouseup', window.rightCancelAction);
+};
+
+/**
+ * 移除对鼠标右键(ESC按键)取消绘制的监听
+ */
+DrawingManager.prototype._removeRightCancelAction = function () {
+	this._rightCancelSwitch = false;
+	if (window.rightCancelAction) {
+		document.removeEventListener('keyup', window.rightCancelAction);
+		document.removeEventListener('mouseup', window.rightCancelAction);
 	}
 };
 
@@ -1014,12 +1084,6 @@ DrawingManager.prototype._bindCircle = function () {
 	 * 开始绘制圆形
 	 */
 	var startAction = function (e) {
-		if (
-			me.controlButton === 'right'
-			&& (Number(e.button) === 1 || Number(e.button === 0))
-		) {
-			return;
-		}
 		centerPoint = e.point;
 		circle = new BMap.Circle(centerPoint, 0, {
 			...me.circleOptions,
@@ -1062,6 +1126,9 @@ DrawingManager.prototype._bindCircle = function () {
 		mask.enableEdgeMove();
 		mask.addEventListener('mousemove', moveAction);
 		baidu.on(document, 'mouseup', endAction);
+		if (me._enableRightCancel) {
+			baidu.on(document, 'keyup', escCancelAction);
+		}
 	};
 
 	/**
@@ -1090,15 +1157,44 @@ DrawingManager.prototype._bindCircle = function () {
 	/**
 	 * 绘制圆形结束
 	 */
-	var endAction = function () {
+	var endAction = function (e) {
 		map.removeOverlay(tipLabel);
-		const calculate = addCalculateLabel('end');
-		me._dispatchOverlayComplete(circle, calculate);
 		centerPoint = null;
 		mask.disableEdgeMove();
+		mask.removeEventListener('mousedown', mousedownAction);
 		mask.removeEventListener('mousemove', moveAction);
-		mask.removeEventListener('mousemove', mousedownAction);
+		mask.removeEventListener('mousemove', mousemoveAction);
 		baidu.un(document, 'mouseup', endAction);
+		const removeAction = function (_e) {
+			if (_e.target.realV) {
+				_e.target.realV.remove();
+			}
+			circle.removeEventListener('remove', removeAction);
+		};
+		circle.addEventListener('remove', removeAction);
+		if (
+			me._enableRightCancel
+			&& (Number(e.button) === 2 || Number(e.keyCode) === 27)
+		) {
+			map.removeOverlay(circle);
+			map.removeOverlay(calculateLabel);
+			return;
+		}
+		if (!me._isOpen) {
+			return;
+		}
+		const calculate = addCalculateLabel('end');
+		me._dispatchOverlayComplete(circle, calculate);
+	};
+
+	/**
+	 * ESC按钮结束圆形绘制
+	 */
+	var escCancelAction = function (e) {
+		if (Number(e.keyCode) === 27) {
+			endAction(e);
+			baidu.un(document, 'keyup', escCancelAction);
+		}
 	};
 
 	/**
@@ -1107,7 +1203,7 @@ DrawingManager.prototype._bindCircle = function () {
 	var mousedownAction = function (e) {
 		baidu.preventDefault(e);
 		baidu.stopBubble(e);
-		if (me.controlButton === 'right' && Number(e.button) === 1) {
+		if (Number(e.button) === 1 || Number(e.button) === 2) {
 			return;
 		}
 		if (centerPoint == null) {
@@ -1220,12 +1316,6 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	 * 鼠标点击的事件
 	 */
 	var startAction = function (e) {
-		if (
-			me.controlButton === 'right'
-			&& (Number(e.button) === 1 || Number(e.button) === 0)
-		) {
-			return;
-		}
 		points.push(e.point);
 		drawPoint = points.concat(points[points.length - 1]);
 		if (points.length === 1) {
@@ -1243,6 +1333,10 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 			mask.enableEdgeMove();
 			mask.addEventListener('mousemove', moveAction);
 			mask.addEventListener('dblclick', dblclickAction);
+			if (me._enableRightCancel) {
+				baidu.on(document, 'mouseup', rightCancelAction);
+				baidu.on(document, 'keyup', rightCancelAction);
+			}
 		}
 	};
 
@@ -1253,7 +1347,7 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		overlay.setPositionAt(drawPoint.length - 1, e.point);
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
-			'单击继续，双击完成',
+			`单击继续，双击完成${me._enableRightCancel ? '，右键取消' : ''}`,
 			me.tipLabelOptions,
 			e.point,
 			new BMap.Size(10, 10),
@@ -1272,23 +1366,52 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		isBinded = false;
 		map.removeOverlay(tipLabel);
 		mask.disableEdgeMove();
-		mask.removeEventListener('mousedown', startAction);
+		mask.removeEventListener('mousedown', mousedownAction);
 		mask.removeEventListener('mousemove', moveAction);
 		mask.removeEventListener('mousemove', mousemoveAction);
 		mask.removeEventListener('dblclick', dblclickAction);
-		if (me.controlButton === 'right') {
-			points.push(e.point);
-		} else if (baidu.ie <= 8) {
+		if (baidu.ie <= 8) {
 			// console.log(points);
 		} else {
 			points.pop();
 		}
 		overlay.setPath(points);
-		const calculate = addCalculateLabel('end');
-		me._dispatchOverlayComplete(overlay, calculate);
+		if (
+			me._enableRightCancel
+			&& (Number(e.button) === 2 || Number(e.keyCode) === 27)
+		) {
+			map.removeOverlay(overlay);
+			map.removeOverlay(calculateLabel);
+		} else {
+			const calculate = addCalculateLabel('end');
+			me._dispatchOverlayComplete(overlay, calculate);
+			me.close();
+		}
 		points.length = 0;
 		drawPoint.length = 0;
-		me.close();
+	};
+
+	/**
+	 * 右键（ESC按键）结束绘制
+	 */
+	var rightCancelAction = function (e) {
+		if (Number(e.button) === 2 || Number(e.keyCode) === 27) {
+			dblclickAction(e);
+			baidu.un(document, 'mouseup', rightCancelAction);
+			baidu.un(document, 'keyup', rightCancelAction);
+		}
+	};
+
+	/**
+	 * 鼠标点击起始点
+	 */
+	var mousedownAction = function (e) {
+		baidu.preventDefault(e);
+		baidu.stopBubble(e);
+		if (Number(e.button) === 1 || Number(e.button) === 2) {
+			return;
+		}
+		startAction(e);
 	};
 
 	/**
@@ -1369,7 +1492,7 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	};
 
 	mask.addEventListener('mousemove', mousemoveAction);
-	mask.addEventListener('mousedown', startAction);
+	mask.addEventListener('mousedown', mousedownAction);
 
 	// 双击时候不放大地图级别
 	mask.addEventListener('dblclick', (e) => {
@@ -1391,14 +1514,6 @@ DrawingManager.prototype._bindRectangle = function () {
 	 * 开始绘制矩形
 	 */
 	var startAction = function (e) {
-		baidu.stopBubble(e);
-		baidu.preventDefault(e);
-		if (
-			me.controlButton === 'right'
-			&& (Number(e.button) === 1 || Number(e.button) === 0)
-		) {
-			return;
-		}
 		startPoint = e.point;
 		const endPoint = startPoint;
 		polygon = new BMap.Polygon(
@@ -1409,6 +1524,9 @@ DrawingManager.prototype._bindRectangle = function () {
 		mask.enableEdgeMove();
 		mask.addEventListener('mousemove', moveAction);
 		baidu.on(document, 'mouseup', endAction);
+		if (me._enableRightCancel) {
+			baidu.on(document, 'keyup', escCancelAction);
+		}
 	};
 
 	/**
@@ -1432,15 +1550,52 @@ DrawingManager.prototype._bindRectangle = function () {
 	/**
 	 * 绘制矩形结束
 	 */
-	var endAction = function () {
+	var endAction = function (e) {
 		map.removeOverlay(tipLabel);
-		const calculate = addCalculateLabel('end');
-		me._dispatchOverlayComplete(polygon, calculate);
 		startPoint = null;
 		mask.disableEdgeMove();
+		mask.removeEventListener('mousedown', mousedownAction);
 		mask.removeEventListener('mousemove', moveAction);
 		mask.removeEventListener('mousemove', mousemoveAction);
 		baidu.un(document, 'mouseup', endAction);
+		if (
+			me._enableRightCancel
+			&& (Number(e.button) === 2 || Number(e.keyCode) === 27)
+		) {
+			map.removeOverlay(polygon);
+			map.removeOverlay(calculateLabel);
+			map.removeOverlay(calculateExtraLabel);
+			return;
+		}
+		if (!me._isOpen) {
+			return;
+		}
+		const calculate = addCalculateLabel('end');
+		me._dispatchOverlayComplete(polygon, calculate);
+	};
+
+	/**
+	 * ESC按钮结束矩形绘制
+	 */
+	var escCancelAction = function (e) {
+		if (Number(e.keyCode) === 27) {
+			endAction(e);
+			baidu.un(document, 'keyup', escCancelAction);
+		}
+	};
+
+	/**
+	 * 鼠标点击起始点
+	 */
+	var mousedownAction = function (e) {
+		baidu.preventDefault(e);
+		baidu.stopBubble(e);
+		if (Number(e.button) === 1 || Number(e.button) === 2) {
+			return;
+		}
+		if (startPoint == null) {
+			startAction(e);
+		}
 	};
 
 	/**
@@ -1567,7 +1722,7 @@ DrawingManager.prototype._bindRectangle = function () {
 		return calculate;
 	};
 
-	mask.addEventListener('mousedown', startAction);
+	mask.addEventListener('mousedown', mousedownAction);
 	mask.addEventListener('mousemove', mousemoveAction);
 };
 
