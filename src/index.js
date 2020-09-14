@@ -1771,7 +1771,7 @@ DrawingManager.prototype._addGeoUtilsLibrary = function () {
 		script.setAttribute('type', 'text/javascript');
 		script.setAttribute(
 			'src',
-			'http://api.map.baidu.com/library/GeoUtils/1.2/src/GeoUtils_min.js',
+			'https://api.map.baidu.com/library/GeoUtils/1.2/src/GeoUtils_min.js',
 		);
 		document.body.appendChild(script);
 	}
