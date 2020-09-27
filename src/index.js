@@ -1301,6 +1301,82 @@ DrawingManager.prototype._bindCircle = function () {
 };
 
 /**
+ * 添加圆形
+ */
+DrawingManager.prototype.addCircle = function (data) {
+	// 画图形
+	if (!data.overlay) {
+		return;
+	}
+	const circleData = data.overlay;
+	const { centerPoint, endPoint, radius } = circleData;
+	if (!centerPoint || !endPoint || !radius) {
+		return;
+	}
+	const me = this;
+	const map = this._map;
+	const circle = new BMap.Circle(centerPoint, radius, {
+		...me.circleOptions,
+		...{ strokeOpacity: '0', fillOpacity: '0' },
+	});
+	map.addOverlay(circle);
+	// 原有通过path画的圆设置为透明，通过插入svg的circle图形进行替代，解决画圆不规范的问题
+	const pixelCenter = map.pointToOverlayPixel(centerPoint);
+	const realCircle = document.createElementNS(
+		'http://www.w3.org/2000/svg',
+		'circle',
+	);
+	realCircle.setAttribute('stroke', circle.z.strokeColor);
+	realCircle.setAttribute('fill', circle.z.fillColor);
+	realCircle.setAttribute('stroke-width', circle.z.lc);
+	realCircle.setAttribute(
+		'stroke-opacity',
+		me.circleOptions.strokeOpacity < 0 || me.circleOptions.strokeOpacity > 1
+			? 0.65
+			: me.circleOptions.strokeOpacity,
+	);
+	realCircle.setAttribute(
+		'fill-opacity',
+		me.circleOptions.fillOpacity < 0 || me.circleOptions.fillOpacity > 1
+			? 0.65
+			: me.circleOptions.fillOpacity,
+	);
+	realCircle.setAttribute(
+		'stroke-dasharray',
+		circle.z.strokeStyle === 'dashed' ? 6 : 0,
+	);
+	realCircle.setAttribute('cx', pixelCenter.x);
+	realCircle.setAttribute('cy', pixelCenter.y);
+	realCircle.setAttribute(
+		'r',
+		Math.round(me.getPixelRadius(centerPoint, endPoint)),
+	);
+	realCircle.setAttribute('style', 'cursor: pointer;user-select: none;');
+	circle.V.setAttribute('style', 'visibility: hidden;');
+	circle.V.parentNode.insertBefore(realCircle, circle.V);
+	circle.realV = realCircle;
+	circle.endPoint = endPoint;
+	const removeAction = function (_e) {
+		if (_e.target.realV) {
+			_e.target.realV.remove();
+		}
+		circle.removeEventListener('remove', removeAction);
+	};
+	circle.addEventListener('remove', removeAction);
+	const result = {
+		overlay: circle || null,
+	};
+	// 添加label
+	const labelData = data.label || {};
+	const { content, position, offset } = labelData;
+	if (content && position) {
+		result.label =			me._addLabel(content, me.calculateLabelOptions, position, offset)
+			|| null;
+	}
+	return result;
+};
+
+/**
  * 画线和画多边形相似性比较大，公用一个方法
  */
 DrawingManager.prototype._bindPolylineOrPolygon = function () {
@@ -1498,6 +1574,66 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	mask.addEventListener('dblclick', (e) => {
 		baidu.stopBubble(e);
 	});
+};
+
+/**
+ * 添加线
+ */
+DrawingManager.prototype.addPolyline = function (data) {
+	// 画图形
+	if (!data.overlay) {
+		return;
+	}
+	const polylineData = data.overlay;
+	const { point } = polylineData;
+	if (!point) {
+		return;
+	}
+	const me = this;
+	const map = this._map;
+	const polyline = new BMap.Polyline(point, me.polylineOptions);
+	map.addOverlay(polyline);
+	const result = {
+		overlay: polyline || null,
+	};
+	// 添加label
+	const labelData = data.label || {};
+	const { content, position, offset } = labelData;
+	if (content && position) {
+		result.label =			me._addLabel(content, me.calculateLabelOptions, position, offset)
+			|| null;
+	}
+	return result;
+};
+
+/**
+ * 添加多边形
+ */
+DrawingManager.prototype.addPolygon = function (data) {
+	// 画图形
+	if (!data.overlay) {
+		return;
+	}
+	const polygonData = data.overlay;
+	const { point } = polygonData;
+	if (!point) {
+		return;
+	}
+	const me = this;
+	const map = this._map;
+	const polygon = new BMap.Polygon(point, me.polygonOptions);
+	map.addOverlay(polygon);
+	const result = {
+		overlay: polygon || null,
+	};
+	// 添加label
+	const labelData = data.label || {};
+	const { content, position, offset } = labelData;
+	if (content && position) {
+		result.label =			me._addLabel(content, me.calculateLabelOptions, position, offset)
+			|| null;
+	}
+	return result;
 };
 
 /**
@@ -1724,6 +1860,59 @@ DrawingManager.prototype._bindRectangle = function () {
 
 	mask.addEventListener('mousedown', mousedownAction);
 	mask.addEventListener('mousemove', mousemoveAction);
+};
+
+/**
+ * 添加矩形
+ */
+DrawingManager.prototype.addRectangle = function (data) {
+	// 画图形
+	if (!data.overlay) {
+		return;
+	}
+	const polygonData = data.overlay;
+	const { startPoint, endPoint } = polygonData;
+	if (!startPoint || !endPoint) {
+		return;
+	}
+	const me = this;
+	const map = this._map;
+	const polygon = new BMap.Polygon(
+		me._getRectanglePoint(startPoint, endPoint),
+		me.rectangleOptions,
+	);
+	map.addOverlay(polygon);
+	const result = {
+		overlay: polygon || null,
+	};
+	// 添加label
+	const labelData = Array.isArray(data.label)
+		? data.label
+		: data.label
+			? [data.label]
+			: [];
+	const label = [];
+	labelData.forEach((item) => {
+		const { content, position, offset } = item;
+		if (content && position) {
+			const temp = me._addLabel(
+				content,
+				me.calculateLabelOptions,
+				position,
+				offset,
+			);
+			if (temp) {
+				label.push(temp);
+			}
+		}
+	});
+	if (label.length === 1) {
+		const [tempData] = label;
+		result.label = tempData;
+	} else if (label.length > 1) {
+		result.label = label;
+	}
+	return result;
 };
 
 /**
