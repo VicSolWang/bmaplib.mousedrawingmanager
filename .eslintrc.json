@@ -11,6 +11,7 @@
 		"dot-notation": "off",
 		"eqeqeq": "off",
 		"guard-for-in": "off",
+		"no-continue": "off",
 		"no-lonely-if": "off",
 		"no-multi-assign": "off",
 		"no-plusplus": "off",

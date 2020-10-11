@@ -4,6 +4,7 @@
  * Email: vic.sol.wang@gmail.com
  */
 
+import isPolygon from './polygon';
 import './style.css';
 
 /**
@@ -1392,7 +1393,13 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	 * 鼠标点击的事件
 	 */
 	var startAction = function (e) {
-		points.push(e.point);
+		const nextPoint = points[points.length - 1] || {};
+		if (
+			Number(nextPoint.lng) !== Number(e.point.lng)
+			|| Number(nextPoint.lat) !== Number(e.point.lat)
+		) {
+			points.push(e.point);
+		}
 		drawPoint = points.concat(points[points.length - 1]);
 		if (points.length === 1) {
 			if (me._drawingType === BMAP_DRAWING_POLYLINE) {
@@ -1421,6 +1428,9 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	 */
 	var moveAction = function (e) {
 		overlay.setPositionAt(drawPoint.length - 1, e.point);
+		if (me._drawingType === BMAP_DRAWING_POLYGON) {
+			overlay.isPolygon = isPolygon(overlay.getPath());
+		}
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
 			`单击继续，双击完成${me._enableRightCancel ? '，右键取消' : ''}`,
@@ -1448,11 +1458,6 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		mask.removeEventListener('dblclick', dblclickAction);
 		baidu.un(document, 'mouseup', rightCancelAction);
 		baidu.un(document, 'keyup', rightCancelAction);
-		if (baidu.ie <= 8) {
-			// console.log(points);
-		} else {
-			points.pop();
-		}
 		overlay.setPath(points);
 		if (
 			me._enableRightCancel
@@ -1461,6 +1466,9 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 			map.removeOverlay(overlay);
 			map.removeOverlay(calculateLabel);
 		} else {
+			if (me._drawingType === BMAP_DRAWING_POLYGON) {
+				overlay.isPolygon = isPolygon(points);
+			}
 			const calculate = addCalculateLabel('end');
 			me._dispatchOverlayComplete(overlay, calculate);
 			me.close();
@@ -1516,6 +1524,9 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 			if (me._drawingType === BMAP_DRAWING_POLYGON) {
 				prefix =					me.calculateDisplayOptions.polygonDisplayPrefix || '面积：';
 				calculate = me._calculate(overlay);
+				if (!overlay.isPolygon) {
+					calculate.data = 0;
+				}
 				content = calculate.data;
 				if (
 					baidu.lang.isFunction(

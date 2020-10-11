@@ -20,7 +20,7 @@
 	border-right: none;
 }
 
-/*拖动地图图标*/
+/* 拖动地图图标 */
 .BMapLib_Drawing .BMapLib_hander {
 	background-position: 0 0;
 }
@@ -29,7 +29,7 @@
 	background-position: 0 -52px;
 }
 
-/*画点图标*/
+/* 画点图标 */
 .BMapLib_Drawing .BMapLib_marker {
 	background-position: -65px 0;
 }
@@ -38,7 +38,7 @@
 	background-position: -65px -52px;
 }
 
-/*画圆图标*/
+/* 画圆图标 */
 .BMapLib_Drawing .BMapLib_circle {
 	background-position: -130px 0;
 }
@@ -47,7 +47,7 @@
 	background-position: -130px -52px;
 }
 
-/*画线图标*/
+/* 画线图标 */
 .BMapLib_Drawing .BMapLib_polyline {
 	background-position: -195px 0;
 }
@@ -56,7 +56,7 @@
 	background-position: -195px -52px;
 }
 
-/*画多边形图标*/
+/* 画多边形图标 */
 .BMapLib_Drawing .BMapLib_polygon {
 	background-position: -260px 0;
 }
@@ -65,7 +65,7 @@
 	background-position: -260px -52px;
 }
 
-/*画矩形图标*/
+/* 画矩形图标 */
 .BMapLib_Drawing .BMapLib_rectangle {
 	background-position: -325px 0;
 }
