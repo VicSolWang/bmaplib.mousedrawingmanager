@@ -717,6 +717,26 @@ DrawingManager.prototype.disableCalculate = function () {
 };
 
 /**
+ * 打开超限控制
+ *
+ * @example <b>参考示例：</b><br />
+ * myDrawingManagerObject.enableLimit();
+ */
+DrawingManager.prototype.enableLimit = function () {
+	this._enableLimit = true;
+};
+
+/**
+ * 关闭超限控制
+ *
+ * @example <b>参考示例：</b><br />
+ * myDrawingManagerObject.disableLimit();
+ */
+DrawingManager.prototype.disableLimit = function () {
+	this._enableLimit = false;
+};
+
+/**
  * 打开鼠标右键(ESC按键)取消绘制功能
  *
  * @example <b>参考示例：</b><br />
@@ -883,6 +903,13 @@ DrawingManager.prototype._initialize = function (map, opts) {
 		this.disableCalculate();
 	}
 
+	// 是否开启超限控制
+	if (opts.enableLimit === true) {
+		this.enableLimit();
+	} else {
+		this.disableLimit();
+	}
+
 	// 是否启用右键(ESC按键)取消绘制功能
 	this._enableRightCancel = opts.enableRightCancel === true;
 	// 右键(ESC按键)取消绘制回调
@@ -905,6 +932,7 @@ DrawingManager.prototype._initialize = function (map, opts) {
 	this.tipLabelOptions = opts.tipLabelOptions || {};
 	this.calculateLabelOptions = opts.calculateLabelOptions || {};
 	this.calculateDisplayOptions = opts.calculateDisplayOptions || {};
+	this.limitOptions = opts.limitOptions || {};
 
 	// 地图缩放时，circle需要重新设置中心点坐标和半径
 	if (window.resetCircleAfterZoomChange) {
@@ -1080,6 +1108,7 @@ DrawingManager.prototype._bindCircle = function () {
 	const mask = this._mask;
 	let circle = null;
 	let centerPoint = null; // 圆的中心点
+	let limitCallbackSwitch = true; // 超限回调开关
 
 	/**
 	 * 开始绘制圆形
@@ -1090,6 +1119,7 @@ DrawingManager.prototype._bindCircle = function () {
 			...me.circleOptions,
 			...{ strokeOpacity: '0', fillOpacity: '0' },
 		});
+		circle.type = me._drawingType;
 		map.addOverlay(circle);
 		// 原有通过path画的圆设置为透明，通过插入svg的circle图形进行替代，解决画圆不规范的问题
 		const pixelCenter = map.pointToOverlayPixel(e.point);
@@ -1137,10 +1167,44 @@ DrawingManager.prototype._bindCircle = function () {
 	 */
 	var moveAction = function (e) {
 		circle.endPoint = e.point;
-		circle.setRadius(me._map.getDistance(centerPoint, e.point));
+		let radius = me._map.getDistance(centerPoint, circle.endPoint);
+		// 如果开启了超限控制，并且有超限值（最小为0）
+		if (me._enableLimit && me.limitOptions.circleLimitValue >= 0) {
+			let radiusLimitValue;
+			if (me.limitOptions.circleLimitType === 'area') {
+				// 超限类型为面积，则先计算出面积超限时的半径
+				radiusLimitValue = Math.sqrt(
+					me.limitOptions.circleLimitValue / Math.PI,
+				);
+			} else {
+				radiusLimitValue = me.limitOptions.circleLimitValue;
+			}
+			// 绘制的圆半径超限，则计算出圆心正上方的圆上一点作为endPoint，并执行超限回调
+			if (radius >= radiusLimitValue) {
+				radius = radiusLimitValue;
+				circle.endPoint = me._getDistancePoint(
+					centerPoint,
+					Number(radiusLimitValue) + 2e-10,
+					true,
+					1,
+				);
+				// 超限后只执行一次超限回调
+				if (
+					limitCallbackSwitch
+					&& baidu.lang.isFunction(me.limitOptions.circleLimitCallback)
+				) {
+					limitCallbackSwitch = false;
+					me.limitOptions.circleLimitCallback();
+				}
+			} else {
+				// 未超限则重新开启超限回调开关
+				limitCallbackSwitch = true;
+			}
+		}
+		circle.setRadius(radius);
 		circle.realV.setAttribute(
 			'r',
-			Math.round(me.getPixelRadius(centerPoint, e.point)),
+			Math.round(me.getPixelRadius(centerPoint, circle.endPoint)),
 		);
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
@@ -1320,6 +1384,7 @@ DrawingManager.prototype.addCircle = function (data) {
 		...me.circleOptions,
 		...{ strokeOpacity: '0', fillOpacity: '0' },
 	});
+	circle.type = BMAP_DRAWING_CIRCLE;
 	map.addOverlay(circle);
 	// 原有通过path画的圆设置为透明，通过插入svg的circle图形进行替代，解决画圆不规范的问题
 	const pixelCenter = map.pointToOverlayPixel(centerPoint);
@@ -1388,6 +1453,8 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	let drawPoint = null; // 实际需要画在地图上的点
 	let overlay = null;
 	let isBinded = false;
+	let areaLimitCallbackSwitch = true; // 面积超限回调开关
+	let lengthLimitCallbackSwitch = true; // 长度超限回调开关
 
 	/**
 	 * 鼠标点击的事件
@@ -1407,6 +1474,7 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 			} else if (me._drawingType === BMAP_DRAWING_POLYGON) {
 				overlay = new BMap.Polygon(drawPoint, me.polygonOptions);
 			}
+			overlay.type = me._drawingType;
 			map.addOverlay(overlay);
 		} else {
 			overlay.setPath(drawPoint);
@@ -1428,8 +1496,59 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 	 */
 	var moveAction = function (e) {
 		overlay.setPositionAt(drawPoint.length - 1, e.point);
+		// 绘制多边形
 		if (me._drawingType === BMAP_DRAWING_POLYGON) {
 			overlay.isPolygon = isPolygon(overlay.getPath());
+			// 在多边形合法的前提下（不合法面积会处理为0，没有必要判断面积是否超限），如果开启了面积超限控制，并且有超限值（最小为0）
+			if (
+				overlay.isPolygon
+				&& me._enableLimit
+				&& me.limitOptions.polygonLimitValue >= 0
+			) {
+				// 判断面积超限后只执行一次超限回调，同时设置图形属性isLimit为true
+				const area = me._calculate(overlay).data;
+				if (area > me.limitOptions.polygonLimitValue) {
+					overlay.isLimit = true;
+					// 超限后只执行一次超限回调
+					if (
+						areaLimitCallbackSwitch
+						&& baidu.lang.isFunction(
+							me.limitOptions.polygonLimitCallback,
+						)
+					) {
+						areaLimitCallbackSwitch = false;
+						me.limitOptions.polygonLimitCallback();
+					}
+				} else {
+					overlay.isLimit = false;
+					// 未超限则重新开启超限回调开关
+					areaLimitCallbackSwitch = true;
+				}
+			}
+		} else {
+			// 绘制线
+			// 如果开启了长度超限控制，并且有超限值（最小为0）
+			if (me._enableLimit && me.limitOptions.polylineLimitValue >= 0) {
+				// 判断长度超限后只执行一次超限回调，同时设置图形属性isLimit为true
+				const length = me._calculate(overlay).data;
+				if (length > me.limitOptions.polylineLimitValue) {
+					overlay.isLimit = true;
+					// 超限后只执行一次超限回调
+					if (
+						lengthLimitCallbackSwitch
+						&& baidu.lang.isFunction(
+							me.limitOptions.polylineLimitCallback,
+						)
+					) {
+						lengthLimitCallbackSwitch = false;
+						me.limitOptions.polylineLimitCallback();
+					}
+				} else {
+					overlay.isLimit = false;
+					// 未超限则重新开启超限回调开关
+					lengthLimitCallbackSwitch = true;
+				}
+			}
 		}
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
@@ -1603,6 +1722,7 @@ DrawingManager.prototype.addPolyline = function (data) {
 	const me = this;
 	const map = this._map;
 	const polyline = new BMap.Polyline(point, me.polylineOptions);
+	polyline.type = BMAP_DRAWING_POLYLINE;
 	map.addOverlay(polyline);
 	const result = {
 		overlay: polyline || null,
@@ -1633,6 +1753,7 @@ DrawingManager.prototype.addPolygon = function (data) {
 	const me = this;
 	const map = this._map;
 	const polygon = new BMap.Polygon(point, me.polygonOptions);
+	polygon.type = BMAP_DRAWING_POLYGON;
 	map.addOverlay(polygon);
 	const result = {
 		overlay: polygon || null,
@@ -1656,6 +1777,9 @@ DrawingManager.prototype._bindRectangle = function () {
 	const mask = this._mask;
 	let polygon = null;
 	let startPoint = null;
+	let lngLimitCallbackSwitch = true; // 水平边超限回调开关
+	let latLimitCallbackSwitch = true; // 垂直边超限回调开关
+	let areaLimitCallbackSwitch = true; // 面积超限回调开关
 
 	/**
 	 * 开始绘制矩形
@@ -1667,6 +1791,7 @@ DrawingManager.prototype._bindRectangle = function () {
 			me._getRectanglePoint(startPoint, endPoint),
 			me.rectangleOptions,
 		);
+		polygon.type = me._drawingType;
 		map.addOverlay(polygon);
 		mask.enableEdgeMove();
 		mask.addEventListener('mousemove', moveAction);
@@ -1680,7 +1805,138 @@ DrawingManager.prototype._bindRectangle = function () {
 	 * 绘制矩形过程中，鼠标移动过程的事件
 	 */
 	var moveAction = function (e) {
-		polygon.setPath(me._getRectanglePoint(startPoint, e.point));
+		let endPoint = e.point;
+		// 如果开启了边长超限控制，并且有超限值（最小为0）
+		if (
+			me._enableLimit
+			&& me.limitOptions.rectangleLimitType === 'side'
+			&& me.limitOptions.rectangleLimitValue >= 0
+		) {
+			let limitPoint2;
+			let limitPoint4;
+			let lngLimitSwitch = false; // 水平边超限开关
+			let latLimitSwitch = false; // 垂直边超限开关
+			// 判断水平边是否超限
+			if (endPoint.lng >= startPoint.lng) {
+				// 结束点在开始点右边
+				limitPoint2 = me._getDistancePoint(
+					startPoint,
+					Number(me.limitOptions.rectangleLimitValue) + 2e-4,
+					false,
+					1,
+				);
+				if (endPoint.lng >= limitPoint2.lng) {
+					// 超限
+					lngLimitSwitch = true;
+				} else {
+					// 未超限
+					lngLimitSwitch = false;
+					// 重新开启超限回调开关
+					lngLimitCallbackSwitch = true;
+				}
+			} else {
+				// 结束点在开始点左边
+				limitPoint2 = me._getDistancePoint(
+					startPoint,
+					Number(me.limitOptions.rectangleLimitValue) + 2e-4,
+					false,
+					0,
+				);
+				if (endPoint.lng <= limitPoint2.lng) {
+					// 超限
+					lngLimitSwitch = true;
+				} else {
+					// 未超限
+					lngLimitSwitch = false;
+					// 重新开启超限回调开关
+					lngLimitCallbackSwitch = true;
+				}
+			}
+			// 判断垂直边是否超限
+			if (endPoint.lat <= startPoint.lat) {
+				// 结束点在开始点下边
+				limitPoint4 = me._getDistancePoint(
+					startPoint,
+					Number(me.limitOptions.rectangleLimitValue) + 2e-4,
+					true,
+					1,
+				);
+				if (endPoint.lat <= limitPoint4.lat) {
+					// 超限
+					latLimitSwitch = true;
+				} else {
+					// 未超限
+					latLimitSwitch = false;
+					// 重新开启超限回调开关
+					latLimitCallbackSwitch = true;
+				}
+			} else {
+				// 结束点在开始点上边
+				limitPoint4 = me._getDistancePoint(
+					startPoint,
+					Number(me.limitOptions.rectangleLimitValue) + 2e-4,
+					true,
+					0,
+				);
+				if (endPoint.lat >= limitPoint4.lat) {
+					// 超限
+					latLimitSwitch = true;
+				} else {
+					// 未超限
+					latLimitSwitch = false;
+					// 重新开启超限回调开关
+					latLimitCallbackSwitch = true;
+				}
+			}
+			// 超限后只执行一次超限回调
+			if (
+				lngLimitSwitch
+				&& lngLimitCallbackSwitch
+				&& baidu.lang.isFunction(me.limitOptions.rectangleLimitCallback)
+			) {
+				lngLimitCallbackSwitch = false;
+				me.limitOptions.rectangleLimitCallback();
+			}
+			if (
+				latLimitSwitch
+				&& latLimitCallbackSwitch
+				&& baidu.lang.isFunction(me.limitOptions.rectangleLimitCallback)
+			) {
+				latLimitCallbackSwitch = false;
+				me.limitOptions.rectangleLimitCallback();
+			}
+			endPoint = new BMap.Point(
+				lngLimitSwitch ? limitPoint2.lng : e.point.lng,
+				latLimitSwitch ? limitPoint4.lat : e.point.lat,
+			);
+		}
+		polygon.setPath(me._getRectanglePoint(startPoint, endPoint));
+		// 如果开启了面积超限控制，并且有超限值（最小为0）
+		if (
+			me._enableLimit
+			&& me.limitOptions.rectangleLimitType === 'area'
+			&& me.limitOptions.rectangleLimitValue >= 0
+		) {
+			// 因为边长固定不了，判断面积超限后只执行一次超限回调，同时设置图形属性isLimit为true
+			const area = me._calculate(polygon).data;
+			if (area > me.limitOptions.rectangleLimitValue) {
+				polygon.isLimit = true;
+				// 超限后只执行一次超限回调
+				if (
+					areaLimitCallbackSwitch
+					&& baidu.lang.isFunction(
+						me.limitOptions.rectangleLimitCallback,
+					)
+				) {
+					areaLimitCallbackSwitch = false;
+					me.limitOptions.rectangleLimitCallback();
+				}
+			} else {
+				polygon.isLimit = false;
+				// 未超限则重新开启超限回调开关
+				areaLimitCallbackSwitch = true;
+			}
+		}
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
 			'松开鼠标完成',
@@ -1892,6 +2148,7 @@ DrawingManager.prototype.addRectangle = function (data) {
 		me._getRectanglePoint(startPoint, endPoint),
 		me.rectangleOptions,
 	);
+	polygon.type = BMAP_DRAWING_RECTANGLE;
 	map.addOverlay(polygon);
 	const result = {
 		overlay: polygon || null,
@@ -1942,7 +2199,14 @@ DrawingManager.prototype._calculate = function (overlay) {
 			result.data = BMapLib.GeoUtils.getPolylineDistance(overlay);
 			break;
 		case '[object Polygon]':
-			result.data = BMapLib.GeoUtils.getPolygonArea(overlay);
+			if (overlay.type === 'rectangle') {
+				const points = overlay.getPath();
+				const width = this._map.getDistance(points[0], points[1]);
+				const height = this._map.getDistance(points[0], points[3]);
+				result.data = width * height;
+			} else {
+				result.data = BMapLib.GeoUtils.getPolygonArea(overlay);
+			}
 			break;
 		case '[object Circle]':
 			result.data =					Math.PI * overlay.getRadius() * overlay.getRadius();
@@ -2013,6 +2277,70 @@ DrawingManager.prototype._getRectanglePoint = function (startPoint, endPoint) {
 		new BMap.Point(endPoint.lng, endPoint.lat),
 		new BMap.Point(startPoint.lng, endPoint.lat),
 	];
+};
+
+/**
+ * 根据已知点经纬度和实际距离（米）求垂直位置或水平位置上与该点距离该距离的点
+ * @param {Point} 已知点
+ * @param {Number} 实际距离（米）
+ * @param {Boolean} 是否是垂直位置 true：垂直位置 false：水平位置，默认false
+ * @param {Number} 相对该点位置 0（垂直上、水平左），1（垂直下、水平右），默认0
+ */
+DrawingManager.prototype._getDistancePoint = function (
+	point,
+	distance,
+	isVertical,
+	position,
+) {
+	// 设两点为(lng1, lat1)，(lng2，lat2)，两点间的实际距离为distance
+	// distance
+	// = R * acos(cos(lat1 * pi / 180) * cos(lat2 * pi / 180) * cos(lng1 * pi / 180 - lng2 * pi / 180)
+	// + sin(lat1 * pi / 180) * sin(lat2 * pi / 180))
+	// 地球半径
+	const R = 6370996.81;
+	// 已知点经纬度转换
+	const Lng1 = (point.lng * Math.PI) / 180;
+	const Lat1 = (point.lat * Math.PI) / 180;
+	// 是否是垂直位置
+	const _isVertical = isVertical || false;
+	// 所求点经纬度
+	let lng2;
+	let lat2;
+	if (_isVertical) {
+		// 垂直位置，所求点lng2与已知点lng1相等
+		lng2 = point.lng;
+		// 化简distance公式进行反推
+		// acos(cos(Lat1) * cos(lat2 * Math.PI / 180) + sin(Lat1) * sin(lat2 * Math.PI / 180))
+		// = distance / R;
+		// 根据和角公式cos(α±β) = cosα * cosβ ∓ sinα * sinβ
+		// cos(Lat1 - lat2 * Math.PI / 180) = cos(distance / R);
+		// Lat1 - lat2 * Math.PI / 180 = distance / R或lat2 * Math.PI / 180 - Lat1 = distance / R;
+		// 上lat2 > lat1，下lat2 < lat
+		lat2 =			((Lat1
+				+ (Number(`${position === 1 ? '-' : '+'}1`) * distance) / R)
+				* 180)
+			/ Math.PI;
+	} else {
+		// 水平位置，所求点lat2与已知点lat1相等
+		lat2 = point.lat;
+		// 化简distance公式进行反推
+		// acos(cos(Lat1)^2 * cos(Lng1 - lng2 * Math.PI / 180) + sin(Lat1)^2) = distance / R;
+		// 根据平方和关系(sinα)^2 +(cosα)^2 = 1
+		// cos(Lng1 - lng2 * Math.PI / 180) = (cos(distance / R) - 1) / cos(Lat1)^2 + 1;
+		// Lng1 - lng2 * Math.PI / 180 = acos((cos(distance / R) - 1) / cos(Lat1)^2 + 1)
+		// 或lng2 * Math.PI / 180 - Lng1 = acos((cos(distance / R) - 1) / cos(Lat1)^2 + 1)
+		// 左lng2 < lng1，右lng2 > lng1
+		lng2 =			((Lng1
+				+ Number(`${position === 1 ? '+' : '-'}1`)
+					* Math.acos(
+						(Math.cos(distance / R) - 1)
+							/ (Math.cos(Lat1) * Math.cos(Lat1))
+							+ 1,
+					))
+				* 180)
+			/ Math.PI;
+	}
+	return new BMap.Point(lng2, lat2);
 };
 
 /**
