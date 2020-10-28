@@ -13,15 +13,20 @@ import postcss from 'rollup-plugin-postcss';
 import del from 'rollup-plugin-delete';
 import path from 'path';
 
+const flagIndex = process.argv.indexOf('--isTest');
+const outputPathPrefix = flagIndex !== -1 && process.argv[flagIndex + 1] === 'true'
+	? 'test/'
+	: '';
+
 export default {
 	input: path.resolve(__dirname, '../src/index.js'),
 	output: {
-		file: path.resolve(__dirname, '../dist/index.js'),
+		file: path.resolve(__dirname, `../${outputPathPrefix}dist/index.js`),
 		format: 'umd',
 		name: 'BMapLib.DrawingManager',
 	},
 	plugins: [
-		del({ targets: 'dist/*' }),
+		del({ targets: `${outputPathPrefix}dist*` }),
 		resolve(),
 		commonjs({
 			include: 'node_modules/**',
@@ -35,7 +40,7 @@ export default {
 		}),
 		uglify(),
 		postcss({
-			extract: path.resolve(__dirname, '../dist/style.css'),
+			extract: path.resolve(__dirname, `../${outputPathPrefix}dist/style.css`),
 			minimize: true,
 		}),
 	],
