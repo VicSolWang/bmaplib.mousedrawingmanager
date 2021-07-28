@@ -930,6 +930,7 @@ DrawingManager.prototype._initialize = function (map, opts) {
 	this.polygonOptions = opts.polygonOptions || {};
 	this.rectangleOptions = opts.rectangleOptions || {};
 	this.tipLabelOptions = opts.tipLabelOptions || {};
+	this.tipDisplayOptions = opts.tipDisplayOptions || {};
 	this.calculateLabelOptions = opts.calculateLabelOptions || {};
 	this.calculateDisplayOptions = opts.calculateDisplayOptions || {};
 	this.limitOptions = opts.limitOptions || {};
@@ -1208,7 +1209,7 @@ DrawingManager.prototype._bindCircle = function () {
 		);
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
-			'松开鼠标完成',
+			me.tipDisplayOptions.circleEndText || '松开鼠标完成',
 			me.tipLabelOptions,
 			e.point,
 			new BMap.Size(10, 10),
@@ -1284,7 +1285,8 @@ DrawingManager.prototype._bindCircle = function () {
 		baidu.stopBubble(e);
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
-			'按下确认中心点，拖拽确认半径',
+			me.tipDisplayOptions.circleStartText
+				|| '按下确认中心点，拖拽确认半径',
 			me.tipLabelOptions,
 			e.point,
 			new BMap.Size(10, 10),
@@ -1552,7 +1554,12 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		}
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
-			`单击继续，双击完成${me._enableRightCancel ? '，右键取消' : ''}`,
+			(me._drawingType === BMAP_DRAWING_POLYGON
+				? me.tipDisplayOptions.polygonEndText
+				: me.tipDisplayOptions.polylineEndText)
+				|| `单击继续，双击完成${
+					me._enableRightCancel ? '，右键取消' : ''
+				}`,
 			me.tipLabelOptions,
 			e.point,
 			new BMap.Size(10, 10),
@@ -1625,7 +1632,9 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 		baidu.stopBubble(e);
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
-			'单击确认起点',
+			(me._drawingType === BMAP_DRAWING_POLYGON
+				? me.tipDisplayOptions.polygonStartText
+				: me.tipDisplayOptions.polylineStartText) || '单击确认起点',
 			me.tipLabelOptions,
 			e.point,
 			new BMap.Size(10, 10),
@@ -1939,7 +1948,7 @@ DrawingManager.prototype._bindRectangle = function () {
 		}
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
-			'松开鼠标完成',
+			me.tipDisplayOptions.rectangleEndText || '松开鼠标完成',
 			me.tipLabelOptions,
 			e.point,
 			new BMap.Size(10, 10),
@@ -2009,7 +2018,8 @@ DrawingManager.prototype._bindRectangle = function () {
 		baidu.stopBubble(e);
 		map.removeOverlay(tipLabel);
 		tipLabel = me._addLabel(
-			'按住确认起点，拖拽进行绘制',
+			me.tipDisplayOptions.rectangleStartText
+				|| '按住确认起点，拖拽进行绘制',
 			me.tipLabelOptions,
 			e.point,
 			new BMap.Size(10, 10),
