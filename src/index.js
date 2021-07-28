@@ -658,6 +658,21 @@ DrawingManager.prototype.close = function () {
 	const me = this;
 	this._close();
 	me._map.removeOverlay(tipLabel);
+	tipLabel = null;
+	if (!me.isCompleteDrawing) {
+		if (calculateLabel) {
+			me._map.removeOverlay(calculateLabel);
+			calculateLabel = null;
+		}
+		if (calculateExtraLabel) {
+			me._map.removeOverlay(calculateExtraLabel);
+			calculateExtraLabel = null;
+		}
+		if (currentOverlay) {
+			me._map.removeOverlay(currentOverlay);
+			currentOverlay = null;
+		}
+	}
 	setTimeout(() => {
 		me._map.enableDoubleClickZoom();
 	}, 2000);
@@ -935,6 +950,8 @@ DrawingManager.prototype._initialize = function (map, opts) {
 	this.calculateDisplayOptions = opts.calculateDisplayOptions || {};
 	this.limitOptions = opts.limitOptions || {};
 
+	this.isCompleteDrawing = false;
+
 	// 地图缩放时，circle需要重新设置中心点坐标和半径
 	if (window.resetCircleAfterZoomChange) {
 		map.removeEventListener('zoomend', window.resetCircleAfterZoomChange);
@@ -1082,6 +1099,7 @@ DrawingManager.prototype._bindMarker = function () {
 		// 往地图上添加marker
 		const marker = new BMap.Marker(e.point, me.markerOptions);
 		map.addOverlay(marker);
+		me.isCompleteDrawing = true;
 		me._dispatchOverlayComplete(marker);
 	};
 	mask.addEventListener('click', clickAction);
@@ -1099,6 +1117,7 @@ DrawingManager.prototype.getPixelRadius = function (centerPoint, endPoint) {
 var tipLabel = null; // 实时文字tip
 var calculateLabel = null; // 实时文字计算
 var calculateExtraLabel = null; // 实时额外文字计算
+var currentOverlay = null; // 当前绘制的图形
 
 /**
  * 绑定鼠标画圆的事件
@@ -1122,6 +1141,7 @@ DrawingManager.prototype._bindCircle = function () {
 		});
 		circle.type = me._drawingType;
 		map.addOverlay(circle);
+		currentOverlay = circle;
 		// 原有通过path画的圆设置为透明，通过插入svg的circle图形进行替代，解决画圆不规范的问题
 		const pixelCenter = map.pointToOverlayPixel(e.point);
 		const realCircle = document.createElementNS(
@@ -1251,7 +1271,9 @@ DrawingManager.prototype._bindCircle = function () {
 			return;
 		}
 		const calculate = addCalculateLabel('end');
+		me.isCompleteDrawing = true;
 		me._dispatchOverlayComplete(circle, calculate);
+		me.close();
 	};
 
 	/**
@@ -1478,6 +1500,7 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 			}
 			overlay.type = me._drawingType;
 			map.addOverlay(overlay);
+			currentOverlay = overlay;
 		} else {
 			overlay.setPath(drawPoint);
 		}
@@ -1596,6 +1619,7 @@ DrawingManager.prototype._bindPolylineOrPolygon = function () {
 				overlay.isPolygon = isPolygon(points);
 			}
 			const calculate = addCalculateLabel('end');
+			me.isCompleteDrawing = true;
 			me._dispatchOverlayComplete(overlay, calculate);
 			me.close();
 		}
@@ -1802,6 +1826,7 @@ DrawingManager.prototype._bindRectangle = function () {
 		);
 		polygon.type = me._drawingType;
 		map.addOverlay(polygon);
+		currentOverlay = polygon;
 		mask.enableEdgeMove();
 		mask.addEventListener('mousemove', moveAction);
 		baidu.on(document, 'mouseup', endAction);
@@ -1984,7 +2009,9 @@ DrawingManager.prototype._bindRectangle = function () {
 			return;
 		}
 		const calculate = addCalculateLabel('end');
+		me.isCompleteDrawing = true;
 		me._dispatchOverlayComplete(polygon, calculate);
+		me.close();
 	};
 
 	/**
