@@ -1,6 +1,6 @@
 {
 	"name": "bmaplib.mousedrawingmanager",
-	"version": "1.3.3",
+	"version": "1.3.6",
 	"description": "A plugin library of Baidu Map JS API",
 	"main": "dist/index.js",
 	"files": [
@@ -53,6 +53,7 @@
 		"husky": "^4.2.5",
 		"lint-staged": "^10.2.11",
 		"nyc": "^15.1.0",
+		"postcss-url": "^8.0.0",
 		"prettier": "^2.0.5",
 		"rollup": "^2.21.0",
 		"rollup-plugin-delete": "^2.0.0",

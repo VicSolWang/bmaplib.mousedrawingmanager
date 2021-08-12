@@ -11,12 +11,11 @@ import replace from '@rollup/plugin-replace';
 import { uglify } from 'rollup-plugin-uglify';
 import postcss from 'rollup-plugin-postcss';
 import del from 'rollup-plugin-delete';
+import url from 'postcss-url';
 import path from 'path';
 
 const flagIndex = process.argv.indexOf('--isTest');
-const outputPathPrefix = flagIndex !== -1 && process.argv[flagIndex + 1] === 'true'
-	? 'test/'
-	: '';
+const outputPathPrefix =	flagIndex !== -1 && process.argv[flagIndex + 1] === 'true' ? 'test/' : '';
 
 export default {
 	input: path.resolve(__dirname, '../src/index.js'),
@@ -40,8 +39,16 @@ export default {
 		}),
 		uglify(),
 		postcss({
-			extract: path.resolve(__dirname, `../${outputPathPrefix}dist/style.css`),
+			extract: path.resolve(
+				__dirname,
+				`../${outputPathPrefix}dist/style.css`,
+			),
 			minimize: true,
+			plugins: [
+				url({
+					url: 'inline',
+				}),
+			],
 		}),
 	],
 };

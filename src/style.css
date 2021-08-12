@@ -12,7 +12,7 @@
 	float: left;
 	width: 64px;
 	height: 100%;
-	background-image: url(http://api.map.baidu.com/library/DrawingManager/1.4/src/bg_drawing_tool.png);
+	background-image: url('./images/bg_drawing_tool.png');
 	cursor: pointer;
 }
 

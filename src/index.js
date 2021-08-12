@@ -911,6 +911,9 @@ DrawingManager.prototype._initialize = function (map, opts) {
 		map.addControl(drawingTool);
 	}
 
+	// 获取GeoUtils库地址
+	this.geoUtilsUrl = opts.geoUtilsUrl || '';
+
 	// 是否计算绘制出的面积
 	if (opts.enableCalculate === true) {
 		this.enableCalculate();
@@ -2272,7 +2275,8 @@ DrawingManager.prototype._addGeoUtilsLibrary = function () {
 		script.setAttribute('type', 'text/javascript');
 		script.setAttribute(
 			'src',
-			'https://api.map.baidu.com/library/GeoUtils/1.2/src/GeoUtils_min.js',
+			this.geoUtilsUrl
+				|| 'https://api.map.baidu.com/library/GeoUtils/1.2/src/GeoUtils_min.js',
 		);
 		document.body.appendChild(script);
 	}
@@ -2429,7 +2433,7 @@ function initMask() {
 		this._map = map;
 		var div = (this.container = document.createElement('div'));
 		const size = this._map.getSize();
-		div.style.cssText = `position:absolute;background:url(about:blank);cursor:crosshair;width:${size.width}px;height:${size.height}px`;
+		div.style.cssText = `position:absolute;background:none;cursor:crosshair;width:${size.width}px;height:${size.height}px`;
 		this._map.addEventListener('resize', (e) => {
 			me._adjustSize(e.size);
 		});
@@ -2714,7 +2718,7 @@ function initDrawingTool() {
 		tips[BMAP_DRAWING_POLYGON] = '画多边形';
 		tips[BMAP_DRAWING_RECTANGLE] = '画矩形';
 		const getItem = function (className, drawingType) {
-			return `<a class="${className}" drawingType="${drawingType}" href="javascript:void(0)" title="${tips[drawingType]}" onfocus="this.blur()"></a>`;
+			return `<a class="${className}" drawingType="${drawingType}" href="javascript:void(0);" title="${tips[drawingType]}" onfocus="this.blur()"></a>`;
 		};
 		const html = [];
 		html.push(getItem('BMapLib_box BMapLib_hander', 'hander'));
